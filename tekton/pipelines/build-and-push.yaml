@@ -15,6 +15,7 @@ spec:
     - name: source
     - name: git-auth
     - name: image-auth
+      optional: true
   tasks:
     - name: fetch-source
       taskRef:
@@ -38,9 +39,32 @@ spec:
           value: $(params.git-revision)
         - name: deleteExisting
           value: "true"
+    - name: prepare-image-auth
+      taskSpec:
+        workspaces:
+          - name: image-auth
+            optional: true
+        steps:
+          - name: ensure-docker-config
+            image: cgr.dev/chainguard/busybox:latest
+            script: |
+              #!/bin/sh
+              set -eu
+
+              if [ "$(workspaces.image-auth.bound)" != "true" ]; then
+                exit 0
+              fi
+
+              if [ ! -f "$(workspaces.image-auth.path)/config.json" ]; then
+                printf '{}\n' > "$(workspaces.image-auth.path)/config.json"
+              fi
+      workspaces:
+        - name: image-auth
+          workspace: image-auth
     - name: build-and-push
       runAfter:
         - fetch-source
+        - prepare-image-auth
       taskRef:
         resolver: git
         params:
