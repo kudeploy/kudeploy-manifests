@@ -1,0 +1,186 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: build-and-push
+spec:
+  params:
+    - name: git-url
+      type: string
+    - name: git-revision
+      type: string
+      default: main
+    - name: git-username
+      type: string
+    - name: git-password
+      type: string
+    - name: image-registry
+      type: string
+    - name: image-repository
+      type: string
+    - name: image-tag
+      type: string
+    - name: image-username
+      type: string
+    - name: image-password
+      type: string
+  workspaces:
+    - name: shared-workspace
+    - name: git-basic-auth
+    - name: image-dockerconfig
+  tasks:
+    - name: prepare-git-basic-auth
+      taskSpec:
+        params:
+          - name: git-url
+            type: string
+          - name: git-username
+            type: string
+          - name: git-password
+            type: string
+        workspaces:
+          - name: credentials
+        steps:
+          - name: write-basic-auth
+            image: alpine:3.20
+            env:
+              - name: GIT_URL
+                value: $(params.git-url)
+              - name: GIT_USERNAME
+                value: $(params.git-username)
+              - name: GIT_PASSWORD
+                value: $(params.git-password)
+            script: |
+              #!/usr/bin/env sh
+              set -eu
+
+              git_url="${GIT_URL}"
+              credential_url="${git_url#https://}"
+              credential_url="${credential_url#http://}"
+
+              cat > "$(workspaces.credentials.path)/.gitconfig" <<'EOF'
+              [credential]
+                helper = store
+              EOF
+
+              printf "https://%s:%s@%s\n" \
+                "${GIT_USERNAME}" \
+                "${GIT_PASSWORD}" \
+                "${credential_url}" \
+                > "$(workspaces.credentials.path)/.git-credentials"
+              chmod 400 "$(workspaces.credentials.path)/.gitconfig" "$(workspaces.credentials.path)/.git-credentials"
+      workspaces:
+        - name: credentials
+          workspace: git-basic-auth
+      params:
+        - name: git-url
+          value: $(params.git-url)
+        - name: git-username
+          value: $(params.git-username)
+        - name: git-password
+          value: $(params.git-password)
+    - name: prepare-image-dockerconfig
+      taskSpec:
+        params:
+          - name: image-registry
+            type: string
+          - name: image-repository
+            type: string
+          - name: image-username
+            type: string
+          - name: image-password
+            type: string
+        workspaces:
+          - name: dockerconfig
+        steps:
+          - name: write-dockerconfig
+            image: alpine:3.20
+            env:
+              - name: IMAGE_REGISTRY
+                value: $(params.image-registry)
+              - name: IMAGE_REPOSITORY
+                value: $(params.image-repository)
+              - name: IMAGE_USERNAME
+                value: $(params.image-username)
+              - name: IMAGE_PASSWORD
+                value: $(params.image-password)
+            script: |
+              #!/usr/bin/env sh
+              set -eu
+
+              image_registry="${IMAGE_REGISTRY}"
+
+              case "${image_registry}" in
+                docker.io|index.docker.io)
+                  auth_host="https://index.docker.io/v1/"
+                  ;;
+                *.*|*:*|localhost)
+                  auth_host="${image_registry}"
+                  ;;
+                *)
+                  echo "image-registry must be a registry host, for example ghcr.io or registry.example.com" >&2
+                  exit 1
+                  ;;
+              esac
+
+              auth="$(printf "%s:%s" "${IMAGE_USERNAME}" "${IMAGE_PASSWORD}" | base64 | tr -d '\n')"
+              cat > "$(workspaces.dockerconfig.path)/config.json" <<EOF
+              {"auths":{"${auth_host}":{"auth":"${auth}"}}}
+              EOF
+              chmod 400 "$(workspaces.dockerconfig.path)/config.json"
+      workspaces:
+        - name: dockerconfig
+          workspace: image-dockerconfig
+      params:
+        - name: image-registry
+          value: $(params.image-registry)
+        - name: image-repository
+          value: $(params.image-repository)
+        - name: image-username
+          value: $(params.image-username)
+        - name: image-password
+          value: $(params.image-password)
+    - name: fetch-source
+      runAfter:
+        - prepare-git-basic-auth
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/tektoncd/catalog.git
+          - name: revision
+            value: dd7cc22f2965ff4c9d8855b7161c2ffe94b6153e
+          - name: pathInRepo
+            value: task/git-clone/0.10/git-clone.yaml
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+        - name: basic-auth
+          workspace: git-basic-auth
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: $(params.git-revision)
+        - name: deleteExisting
+          value: "true"
+    - name: build-and-push
+      runAfter:
+        - fetch-source
+        - prepare-image-dockerconfig
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/tektoncd/catalog.git
+          - name: revision
+            value: cbc42eb541d822bd7b3fad85b5bb76727152eb9e
+          - name: pathInRepo
+            value: task/buildah/0.9/buildah.yaml
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: dockerconfig
+          workspace: image-dockerconfig
+      params:
+        - name: IMAGE
+          value: $(params.image-registry)/$(params.image-repository):$(params.image-tag)
