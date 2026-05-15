@@ -9,9 +9,15 @@ spec:
     - name: git-revision
       type: string
       default: main
-    - name: git-username
+    - name: git-secret-name
       type: string
-    - name: git-password
+    - name: git-username-key
+      type: string
+      default: username
+    - name: git-password-key
+      type: string
+      default: password
+    - name: image-secret-name
       type: string
     - name: image-registry
       type: string
@@ -19,10 +25,12 @@ spec:
       type: string
     - name: image-tag
       type: string
-    - name: image-username
+    - name: image-username-key
       type: string
-    - name: image-password
+      default: username
+    - name: image-password-key
       type: string
+      default: password
   workspaces:
     - name: shared-workspace
     - name: git-basic-auth
@@ -33,9 +41,11 @@ spec:
         params:
           - name: git-url
             type: string
-          - name: git-username
+          - name: git-secret-name
             type: string
-          - name: git-password
+          - name: git-username-key
+            type: string
+          - name: git-password-key
             type: string
         workspaces:
           - name: credentials
@@ -46,9 +56,15 @@ spec:
               - name: GIT_URL
                 value: $(params.git-url)
               - name: GIT_USERNAME
-                value: $(params.git-username)
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.git-secret-name)
+                    key: $(params.git-username-key)
               - name: GIT_PASSWORD
-                value: $(params.git-password)
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.git-secret-name)
+                    key: $(params.git-password-key)
             script: |
               #!/usr/bin/env sh
               set -eu
@@ -74,20 +90,24 @@ spec:
       params:
         - name: git-url
           value: $(params.git-url)
-        - name: git-username
-          value: $(params.git-username)
-        - name: git-password
-          value: $(params.git-password)
+        - name: git-secret-name
+          value: $(params.git-secret-name)
+        - name: git-username-key
+          value: $(params.git-username-key)
+        - name: git-password-key
+          value: $(params.git-password-key)
     - name: prepare-image-dockerconfig
       taskSpec:
         params:
+          - name: image-secret-name
+            type: string
           - name: image-registry
             type: string
           - name: image-repository
             type: string
-          - name: image-username
+          - name: image-username-key
             type: string
-          - name: image-password
+          - name: image-password-key
             type: string
         workspaces:
           - name: dockerconfig
@@ -100,9 +120,15 @@ spec:
               - name: IMAGE_REPOSITORY
                 value: $(params.image-repository)
               - name: IMAGE_USERNAME
-                value: $(params.image-username)
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.image-secret-name)
+                    key: $(params.image-username-key)
               - name: IMAGE_PASSWORD
-                value: $(params.image-password)
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.image-secret-name)
+                    key: $(params.image-password-key)
             script: |
               #!/usr/bin/env sh
               set -eu
@@ -131,14 +157,16 @@ spec:
         - name: dockerconfig
           workspace: image-dockerconfig
       params:
+        - name: image-secret-name
+          value: $(params.image-secret-name)
         - name: image-registry
           value: $(params.image-registry)
         - name: image-repository
           value: $(params.image-repository)
-        - name: image-username
-          value: $(params.image-username)
-        - name: image-password
-          value: $(params.image-password)
+        - name: image-username-key
+          value: $(params.image-username-key)
+        - name: image-password-key
+          value: $(params.image-password-key)
     - name: fetch-source
       runAfter:
         - prepare-git-basic-auth
