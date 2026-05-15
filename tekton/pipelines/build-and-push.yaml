@@ -14,6 +14,7 @@ spec:
   workspaces:
     - name: source
     - name: git-auth
+      optional: true
     - name: image-auth
       optional: true
   tasks:
