@@ -37,6 +37,8 @@ spec:
           value: $(params.git-url)
         - name: revision
           value: $(params.git-revision)
+        - name: depth
+          value: "1"
         - name: deleteExisting
           value: "true"
     - name: prepare-image-auth
