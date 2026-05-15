@@ -33,10 +33,10 @@ spec:
       default: password
   workspaces:
     - name: shared-workspace
-    - name: git-basic-auth
-    - name: image-dockerconfig
+    - name: git-auth
+    - name: image-auth
   tasks:
-    - name: prepare-git-basic-auth
+    - name: prepare-git-auth
       taskSpec:
         params:
           - name: git-url
@@ -48,9 +48,9 @@ spec:
           - name: git-password-key
             type: string
         workspaces:
-          - name: credentials
+          - name: auth
         steps:
-          - name: write-basic-auth
+          - name: write-git-auth
             image: alpine:3.20
             env:
               - name: GIT_URL
@@ -73,7 +73,7 @@ spec:
               credential_url="${git_url#https://}"
               credential_url="${credential_url#http://}"
 
-              cat > "$(workspaces.credentials.path)/.gitconfig" <<'EOF'
+              cat > "$(workspaces.auth.path)/.gitconfig" <<'EOF'
               [credential]
                 helper = store
               EOF
@@ -82,11 +82,11 @@ spec:
                 "${GIT_USERNAME}" \
                 "${GIT_PASSWORD}" \
                 "${credential_url}" \
-                > "$(workspaces.credentials.path)/.git-credentials"
-              chmod 400 "$(workspaces.credentials.path)/.gitconfig" "$(workspaces.credentials.path)/.git-credentials"
+                > "$(workspaces.auth.path)/.git-credentials"
+              chmod 400 "$(workspaces.auth.path)/.gitconfig" "$(workspaces.auth.path)/.git-credentials"
       workspaces:
-        - name: credentials
-          workspace: git-basic-auth
+        - name: auth
+          workspace: git-auth
       params:
         - name: git-url
           value: $(params.git-url)
@@ -96,7 +96,7 @@ spec:
           value: $(params.git-username-key)
         - name: git-password-key
           value: $(params.git-password-key)
-    - name: prepare-image-dockerconfig
+    - name: prepare-image-auth
       taskSpec:
         params:
           - name: image-secret-name
@@ -110,9 +110,9 @@ spec:
           - name: image-password-key
             type: string
         workspaces:
-          - name: dockerconfig
+          - name: auth
         steps:
-          - name: write-dockerconfig
+          - name: write-image-auth
             image: alpine:3.20
             env:
               - name: IMAGE_REGISTRY
@@ -149,13 +149,13 @@ spec:
               esac
 
               auth="$(printf "%s:%s" "${IMAGE_USERNAME}" "${IMAGE_PASSWORD}" | base64 | tr -d '\n')"
-              cat > "$(workspaces.dockerconfig.path)/config.json" <<EOF
+              cat > "$(workspaces.auth.path)/config.json" <<EOF
               {"auths":{"${auth_host}":{"auth":"${auth}"}}}
               EOF
-              chmod 400 "$(workspaces.dockerconfig.path)/config.json"
+              chmod 400 "$(workspaces.auth.path)/config.json"
       workspaces:
-        - name: dockerconfig
-          workspace: image-dockerconfig
+        - name: auth
+          workspace: image-auth
       params:
         - name: image-secret-name
           value: $(params.image-secret-name)
@@ -169,7 +169,7 @@ spec:
           value: $(params.image-password-key)
     - name: fetch-source
       runAfter:
-        - prepare-git-basic-auth
+        - prepare-git-auth
       taskRef:
         resolver: git
         params:
@@ -183,7 +183,7 @@ spec:
         - name: output
           workspace: shared-workspace
         - name: basic-auth
-          workspace: git-basic-auth
+          workspace: git-auth
       params:
         - name: url
           value: $(params.git-url)
@@ -194,7 +194,7 @@ spec:
     - name: build-and-push
       runAfter:
         - fetch-source
-        - prepare-image-dockerconfig
+        - prepare-image-auth
       taskRef:
         resolver: git
         params:
@@ -208,7 +208,7 @@ spec:
         - name: source
           workspace: shared-workspace
         - name: dockerconfig
-          workspace: image-dockerconfig
+          workspace: image-auth
       params:
         - name: IMAGE
           value: $(params.image-registry)/$(params.image-repository):$(params.image-tag)
