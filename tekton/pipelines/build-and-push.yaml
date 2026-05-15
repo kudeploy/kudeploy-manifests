@@ -17,7 +17,7 @@ spec:
     - name: image-auth
       optional: true
   tasks:
-    - name: fetch-source
+    - name: checkout
       taskRef:
         resolver: git
         params:
@@ -65,7 +65,7 @@ spec:
           workspace: image-auth
     - name: build-and-push
       runAfter:
-        - fetch-source
+        - checkout
         - prepare-image-auth
       taskRef:
         resolver: git
