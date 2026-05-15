@@ -9,167 +9,14 @@ spec:
     - name: git-revision
       type: string
       default: main
-    - name: git-secret-name
+    - name: image
       type: string
-    - name: git-username-key
-      type: string
-      default: username
-    - name: git-password-key
-      type: string
-      default: password
-    - name: image-secret-name
-      type: string
-    - name: image-registry
-      type: string
-    - name: image-repository
-      type: string
-    - name: image-tag
-      type: string
-    - name: image-username-key
-      type: string
-      default: username
-    - name: image-password-key
-      type: string
-      default: password
   workspaces:
-    - name: shared-workspace
+    - name: source
     - name: git-auth
     - name: image-auth
   tasks:
-    - name: prepare-git-auth
-      taskSpec:
-        params:
-          - name: git-url
-            type: string
-          - name: git-secret-name
-            type: string
-          - name: git-username-key
-            type: string
-          - name: git-password-key
-            type: string
-        workspaces:
-          - name: auth
-        steps:
-          - name: write-git-auth
-            image: alpine:3.20
-            env:
-              - name: GIT_URL
-                value: $(params.git-url)
-              - name: GIT_USERNAME
-                valueFrom:
-                  secretKeyRef:
-                    name: $(params.git-secret-name)
-                    key: $(params.git-username-key)
-              - name: GIT_PASSWORD
-                valueFrom:
-                  secretKeyRef:
-                    name: $(params.git-secret-name)
-                    key: $(params.git-password-key)
-            script: |
-              #!/usr/bin/env sh
-              set -eu
-
-              git_url="${GIT_URL}"
-              credential_url="${git_url#https://}"
-              credential_url="${credential_url#http://}"
-
-              cat > "$(workspaces.auth.path)/.gitconfig" <<'EOF'
-              [credential]
-                helper = store
-              EOF
-
-              printf "https://%s:%s@%s\n" \
-                "${GIT_USERNAME}" \
-                "${GIT_PASSWORD}" \
-                "${credential_url}" \
-                > "$(workspaces.auth.path)/.git-credentials"
-              chmod 400 "$(workspaces.auth.path)/.gitconfig" "$(workspaces.auth.path)/.git-credentials"
-      workspaces:
-        - name: auth
-          workspace: git-auth
-      params:
-        - name: git-url
-          value: $(params.git-url)
-        - name: git-secret-name
-          value: $(params.git-secret-name)
-        - name: git-username-key
-          value: $(params.git-username-key)
-        - name: git-password-key
-          value: $(params.git-password-key)
-    - name: prepare-image-auth
-      taskSpec:
-        params:
-          - name: image-secret-name
-            type: string
-          - name: image-registry
-            type: string
-          - name: image-repository
-            type: string
-          - name: image-username-key
-            type: string
-          - name: image-password-key
-            type: string
-        workspaces:
-          - name: auth
-        steps:
-          - name: write-image-auth
-            image: alpine:3.20
-            env:
-              - name: IMAGE_REGISTRY
-                value: $(params.image-registry)
-              - name: IMAGE_REPOSITORY
-                value: $(params.image-repository)
-              - name: IMAGE_USERNAME
-                valueFrom:
-                  secretKeyRef:
-                    name: $(params.image-secret-name)
-                    key: $(params.image-username-key)
-              - name: IMAGE_PASSWORD
-                valueFrom:
-                  secretKeyRef:
-                    name: $(params.image-secret-name)
-                    key: $(params.image-password-key)
-            script: |
-              #!/usr/bin/env sh
-              set -eu
-
-              image_registry="${IMAGE_REGISTRY}"
-
-              case "${image_registry}" in
-                docker.io|index.docker.io)
-                  auth_host="https://index.docker.io/v1/"
-                  ;;
-                *.*|*:*|localhost)
-                  auth_host="${image_registry}"
-                  ;;
-                *)
-                  echo "image-registry must be a registry host, for example ghcr.io or registry.example.com" >&2
-                  exit 1
-                  ;;
-              esac
-
-              auth="$(printf "%s:%s" "${IMAGE_USERNAME}" "${IMAGE_PASSWORD}" | base64 | tr -d '\n')"
-              cat > "$(workspaces.auth.path)/config.json" <<EOF
-              {"auths":{"${auth_host}":{"auth":"${auth}"}}}
-              EOF
-              chmod 400 "$(workspaces.auth.path)/config.json"
-      workspaces:
-        - name: auth
-          workspace: image-auth
-      params:
-        - name: image-secret-name
-          value: $(params.image-secret-name)
-        - name: image-registry
-          value: $(params.image-registry)
-        - name: image-repository
-          value: $(params.image-repository)
-        - name: image-username-key
-          value: $(params.image-username-key)
-        - name: image-password-key
-          value: $(params.image-password-key)
     - name: fetch-source
-      runAfter:
-        - prepare-git-auth
       taskRef:
         resolver: git
         params:
@@ -181,7 +28,7 @@ spec:
             value: task/git-clone/0.10/git-clone.yaml
       workspaces:
         - name: output
-          workspace: shared-workspace
+          workspace: source
         - name: basic-auth
           workspace: git-auth
       params:
@@ -194,7 +41,6 @@ spec:
     - name: build-and-push
       runAfter:
         - fetch-source
-        - prepare-image-auth
       taskRef:
         resolver: git
         params:
@@ -206,9 +52,9 @@ spec:
             value: task/buildah/0.9/buildah.yaml
       workspaces:
         - name: source
-          workspace: shared-workspace
+          workspace: source
         - name: dockerconfig
           workspace: image-auth
       params:
         - name: IMAGE
-          value: $(params.image-registry)/$(params.image-repository):$(params.image-tag)
+          value: $(params.image)
