@@ -46,10 +46,6 @@ spec:
   - name: BUILD_EXTRA_ARGS
     description: Extra parameters passed for the build command when building images. WARNING - must be sanitized to avoid command injection
     default: ""
-  - name: BUILDAH_GLOBAL_ARGS
-    description: Extra global parameters passed to buildah before the command. WARNING - must be sanitized to avoid command injection
-    type: string
-    default: ""
   - name: PUSH_EXTRA_ARGS
     description: Extra parameters passed for the push command when pushing images. WARNING - must be sanitized to avoid command injection
     type: string
@@ -96,8 +92,6 @@ spec:
       value: $(params.FORMAT)
     - name: PARAM_BUILD_EXTRA_ARGS
       value: $(params.BUILD_EXTRA_ARGS)
-    - name: PARAM_BUILDAH_GLOBAL_ARGS
-      value: $(params.BUILDAH_GLOBAL_ARGS)
     - name: PARAM_PUSH_EXTRA_ARGS
       value: $(params.PUSH_EXTRA_ARGS)
     - name: PARAM_SKIP_PUSH
@@ -112,15 +106,20 @@ spec:
       done
       [ "$(workspaces.sslcertdir.bound)" = "true" ] && CERT_DIR_FLAG="--cert-dir=$(workspaces.sslcertdir.path)"
       [ "$(workspaces.dockerconfig.bound)" = "true" ] && DOCKER_CONFIG="$(workspaces.dockerconfig.path)" && export DOCKER_CONFIG
+      mkdir -p "${HOME}/.config/containers"
+      cat > "${HOME}/.config/containers/registries.conf" <<'EOF'
+      unqualified-search-registries = ["docker.io"]
+      short-name-mode = "permissive"
+      EOF
       # build the image (CERT_DIR_FLAG should be omitted if empty and BUILD_EXTRA_ARGS can contain multiple args)
       # shellcheck disable=SC2046,SC2086
-      buildah ${PARAM_BUILDAH_GLOBAL_ARGS} ${CERT_DIR_FLAG} "--storage-driver=${PARAM_STORAGE_DRIVER}" bud "${BUILD_ARGS[@]}" ${PARAM_BUILD_EXTRA_ARGS} \
+      buildah ${CERT_DIR_FLAG} "--storage-driver=${PARAM_STORAGE_DRIVER}" bud "${BUILD_ARGS[@]}" ${PARAM_BUILD_EXTRA_ARGS} \
         "--format=${PARAM_FORMAT}" "--tls-verify=${PARAM_TLSVERIFY}" \
         -f "${PARAM_DOCKERFILE}" -t "${PARAM_IMAGE}" "${PARAM_CONTEXT}"
       [ "${PARAM_SKIP_PUSH}" = "true" ] && echo "Push skipped" && exit 0
       # push the image (CERT_DIR_FLAG should be omitted if empty and PUSH_EXTRA_ARGS can contain multiple args)
       # shellcheck disable=SC2046,SC2086
-      buildah ${PARAM_BUILDAH_GLOBAL_ARGS} ${CERT_DIR_FLAG} "--storage-driver=${PARAM_STORAGE_DRIVER}" push \
+      buildah ${CERT_DIR_FLAG} "--storage-driver=${PARAM_STORAGE_DRIVER}" push \
         "--tls-verify=${PARAM_TLSVERIFY}" --digestfile /tmp/image-digest ${PARAM_PUSH_EXTRA_ARGS} \
         "${PARAM_IMAGE}" "docker://${PARAM_IMAGE}"
       tee "$(results.IMAGE_DIGEST.path)" < /tmp/image-digest
