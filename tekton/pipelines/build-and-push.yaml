@@ -8,7 +8,7 @@ spec:
       type: string
     - name: git-revision
       type: string
-      default: main
+      default: ""
     - name: image
       type: string
     - name: context
