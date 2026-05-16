@@ -23,7 +23,7 @@ spec:
         resolver: http
         params:
           - name: url
-            value: https://raw.githubusercontent.com/kudeploy/manifests/main/tekton/tasks/git-clone.yaml
+            value: https://raw.githubusercontent.com/kudeploy/kudeploy-manifests/main/tekton/tasks/git-clone.yaml
       workspaces:
         - name: output
           workspace: source
@@ -45,7 +45,7 @@ spec:
         resolver: http
         params:
           - name: url
-            value: https://raw.githubusercontent.com/kudeploy/manifests/main/tekton/tasks/buildah.yaml
+            value: https://raw.githubusercontent.com/kudeploy/kudeploy-manifests/main/tekton/tasks/buildah.yaml
       workspaces:
         - name: source
           workspace: source
