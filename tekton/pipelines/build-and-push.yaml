@@ -20,14 +20,10 @@ spec:
   tasks:
     - name: checkout
       taskRef:
-        resolver: git
+        resolver: http
         params:
           - name: url
-            value: https://github.com/tektoncd/catalog.git
-          - name: revision
-            value: dd7cc22f2965ff4c9d8855b7161c2ffe94b6153e
-          - name: pathInRepo
-            value: task/git-clone/0.10/git-clone.yaml
+            value: https://raw.githubusercontent.com/tektoncd/catalog/main/task/git-clone/0.10/git-clone.yaml
       workspaces:
         - name: output
           workspace: source
@@ -46,14 +42,10 @@ spec:
       runAfter:
         - checkout
       taskRef:
-        resolver: git
+        resolver: http
         params:
           - name: url
-            value: https://github.com/tektoncd/catalog.git
-          - name: revision
-            value: cbc42eb541d822bd7b3fad85b5bb76727152eb9e
-          - name: pathInRepo
-            value: task/buildah/0.9/buildah.yaml
+            value: https://raw.githubusercontent.com/tektoncd/catalog/main/task/buildah/0.9/buildah.yaml
       workspaces:
         - name: source
           workspace: source
