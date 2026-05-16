@@ -11,6 +11,12 @@ spec:
       default: main
     - name: image
       type: string
+    - name: context
+      type: string
+      default: .
+    - name: dockerfile
+      type: string
+      default: ./Dockerfile
   workspaces:
     - name: source
     - name: git-auth
@@ -54,3 +60,7 @@ spec:
       params:
         - name: IMAGE
           value: $(params.image)
+        - name: CONTEXT
+          value: $(params.context)
+        - name: DOCKERFILE
+          value: $(params.dockerfile)
